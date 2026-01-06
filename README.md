@@ -43,7 +43,7 @@
   - **TGID**: 可选，tg机器人ID，用于发送tg通知
   - **TGTOKEN**: 可选，tg聊天ID或频道ID，用于发送tg通知
 - 转到 `variables` 选项卡，设置以下变量:
-  - **CF_ACCOUNT_ID**: 必须，CF的账户ID
+  - **CF_ACCOUNT_ID**: 必须，CF的账户ID，**是ID不是邮箱账号**
   - **CF_CRONS**: 可选，用于定时检查域名到期情况以发送tg通知
 
 ### 运行 action
@@ -63,7 +63,7 @@
 | `SITENAME` | 网站名称 | `域名到期监控` | ❌ |
 | `ICON` | 网站图标 | `https://example.com/icon.png` | ❌ |
 | `BGIMG` | 背景图片 | `https://example.com/bg.png` | ❌ |
-| `GITHUB_URL` | GitHub 链接 | `https://github.com/yutian81` | ❌ |
+| `GITHUB_URL` | GitHub 链接 | `https://github.com/yutian81/domain-check` | ❌ |
 | `BLOG_URL` | 博客链接 | `https://blog.notett.com` | ❌ |
 | `BLOG_NAME` | 博客名称 | `QingYun Blog` | ❌ |
 
@@ -71,14 +71,17 @@
 
 https://github.com/yutian81/domain-check/blob/main/API.md
 
-## 安全建议
+---
 
-⚠️ **重要提示**：
+## 感谢 YXVM 与 ZMTO 赞助免费服务器
 
-1. 使用强密码并定期更换
-2. 定期备份 KV 数据，可在项目主页右上角点击 `导出数据` 来备份 (有计划升级自动备份到私有gist 及从 gist 还原数据)
-3. 限制 API 访问频率
-
+<a href="https://yxvm.com/aff.php?aff=891">
+  <img src="https://github.com/user-attachments/assets/33ad6d6e-e159-4840-b6a3-f1ea3faa9df9" width="48%">
+</a>
+<a href="https://console.zmto.com/?affid=1598">
+  <img src="https://github.com/user-attachments/assets/02a0d439-0283-43fe-a028-1212412b324e" width="48%">
+</a>
+ 
 ## 许可证
 
 MIT License

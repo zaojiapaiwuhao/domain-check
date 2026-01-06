@@ -8,7 +8,7 @@ let currentFilteredDomains = []; // 存储当前过滤和搜索后的数据
 let currentPage = 1; // 默认显示第一页
 let currentGroup = '全部'; // 默认激活的分组
 let currentSearchTerm = ''; // 搜索框默认为空
-let currentStatusFilter = '全部'; // 默认显示的概览信息卡
+let currentStatusFilter = ''; // 概览信息卡默认为空
 let globalConfig = { daysThreshold: 30 }; // 默认30天内为将到期
 let lastOperatedDomain = null; // 存储最近操作的域名，用于临时置顶
 
@@ -43,7 +43,6 @@ function calculateExpirationDate() {
     const renewalPeriodEl = document.getElementById('renewalPeriod');
     const renewalUnitEl = document.getElementById('renewalUnit');
     const expirationDateEl = document.getElementById('expirationDate');
-
     const regDateStr = registrationDateEl.value;
     const period = parseInt(renewalPeriodEl.value);
     const unit = renewalUnitEl.value;
@@ -69,7 +68,6 @@ async function fetchConfig() {
         const response = await fetch(CONFIG_API);
         if (response.ok) {
             const config = await response.json();
-            
             // 更新全局配置
             globalConfig = {
                 ...globalConfig,
@@ -104,7 +102,6 @@ async function exportData() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
         alert('域名数据已成功导出为 JSON 文件！');
     } catch (error) {
         console.error('导出数据失败:', error);
@@ -133,10 +130,7 @@ function importData() {
                 try {
                     const jsonContent = e.target.result;
                     const domainsToImport = JSON.parse(jsonContent);
-                    
-                    if (!Array.isArray(domainsToImport)) {
-                        throw new Error('JSON 文件格式错误，期望一个域名数组');
-                    }
+                    if (!Array.isArray(domainsToImport)) { throw new Error('JSON 文件格式错误，须为域名数组'); }
 
                     // 调用 PUT API 替换所有数据
                     const response = await fetch(DOMAINS_API, {
@@ -181,9 +175,9 @@ function getDomainStatus(expirationDateStr) {
     if (isNaN(expirationTime)) {
         return { statusText: '日期格式错误', statusColor: '#95a5a6', daysRemaining: 'N/A' };
     }
+    
     const timeDiff = expirationTime - todayUTC;
     const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
-    
     let statusText = '正常';
     let statusColor = '#2ecc71'; // 绿色
 
@@ -199,16 +193,17 @@ function getDomainStatus(expirationDateStr) {
 }
 
 // 渲染域名信息概览
-function renderSummary() {
+function renderSummary(domainsList) {
     const summaryEl = document.getElementById('summary');
     if (!summaryEl) return;
 
-    const total = allDomains.length;
+    // 使用传入的列表来计算总数
+    const total = domainsList.length;
     let normalCount = 0;
     let expiringCount = 0;
     let expiredCount = 0;
 
-    allDomains.forEach(domain => {
+    domainsList.forEach(domain => {
         const { statusText } = getDomainStatus(domain.expirationDate);
         if (statusText === '正常') {
             normalCount++;
@@ -221,26 +216,27 @@ function renderSummary() {
 
     const usableCount = normalCount + expiringCount; // 状态“正常”和“将到期”的域名都视为“可用”
 
+    // 生成 HTML 并根据 currentStatusFilter 动态添加 active 类
     summaryEl.innerHTML = \`
-        <div class="summary-card" style="--color: #186db3;" data-filter="全部">
+        <div class="summary-card \${currentStatusFilter === '全部' ? 'active' : ''}" style="--color: #186db3;" data-filter="全部">
             <h3><i class="fa fa-list-ol"></i> 全部</h3>
             <p>\${total}</p>
         </div>
-        <div class="summary-card" style="--color: #1dab58;" data-filter="正常">
+        <div class="summary-card \${currentStatusFilter === '正常' ? 'active' : ''}" style="--color: #1dab58;" data-filter="正常">
             <h3><i class="fa fa-check"></i> 正常</h3>
             <p>\${usableCount}</p>
         </div>
-        <div class="summary-card" style="--color: #f39c12;" data-filter="将到期">
+        <div class="summary-card \${currentStatusFilter === '将到期' ? 'active' : ''}" style="--color: #f39c12;" data-filter="将到期">
             <h3><i class="fa fa-exclamation-triangle"></i> 将到期</h3>
             <p>\${expiringCount}</p>
         </div>
-        <div class="summary-card" style="--color: #e74c3c;" data-filter="已到期">
+        <div class="summary-card \${currentStatusFilter === '已到期' ? 'active' : ''}" style="--color: #e74c3c;" data-filter="已到期">
             <h3><i class="fa fa-times"></i> 已到期</h3>
             <p>\${expiredCount}</p>
         </div>
     \`;
 
-    // 绑定点击事件
+    // 重新绑定点击事件
     summaryEl.querySelectorAll('.summary-card').forEach(card => {
         card.addEventListener('click', handleSummaryClick);
     });
@@ -251,22 +247,22 @@ function handleSummaryClick(e) {
     const clickedCard = e.currentTarget;
     const filterValue = clickedCard.dataset.filter;
 
+    // 移除所有卡片的 active 状态
     document.querySelectorAll('#summary .summary-card').forEach(card => {
         card.classList.remove('active');
-    }); // 移除所有卡片的 active 状态
+    });
 
     clickedCard.classList.add('active'); // 为当前点击的卡片添加 active 状态
-    currentStatusFilter = filterValue; // 1. 更新状态筛选变量
+    currentStatusFilter = filterValue; // 更新状态筛选变量
     currentGroup = '全部'; // 将分组筛选重置为“全部”
 
+    // 移除分组标签的 active 状态
     document.querySelectorAll('#groupTabs .tab-btn').forEach(tab => {
         tab.classList.remove('active');
-    }); // 移除分组标签的 active 状态
-
-    const allTab = document.querySelector('#groupTabs .tab-btn[data-group="全部"]'); // 重新激活 "全部" 标签
-    if (allTab) {
-        allTab.classList.add('active');
-    }
+    });
+    // 重新激活 "全部" 标签
+    const allTab = document.querySelector('#groupTabs .tab-btn[data-group="全部"]');
+    if (allTab) { allTab.classList.add('active'); }
 
     currentPage = 1; // 重置页码并应用新的筛选
     applyFiltersAndSearch();
@@ -297,13 +293,9 @@ function renderGroupTabs() {
     });
 
     tabsEl.innerHTML = html;
-    
+    // 绑定点击事件
     tabsEl.querySelectorAll('.tab-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
-            currentGroup = e.target.dataset.group;
-            currentPage = 1;
-            applyFiltersAndSearch();
-        });
+        button.addEventListener('click', handleTabClick);
     });
 }
 
@@ -324,7 +316,7 @@ function handleTabClick(e) {
     clickedTab.classList.add('active');
 
     // 清除概览卡片的筛选状态
-    currentStatusFilter = '全部';
+    currentStatusFilter = '';
     const allSummaryCards = document.querySelectorAll('#summary .summary-card');
     allSummaryCards.forEach(card => {
         card.classList.remove('active');
@@ -338,9 +330,7 @@ function handleTabClick(e) {
 
 // 生成单个域名卡片的 HTML
 function createDomainCard(info) {
-    // 确保 info.expirationDate 存在，否则 getDomainStatus 会返回“信息缺失”
     const { statusText, statusColor, daysRemaining } = getDomainStatus(info.expirationDate);
-    
     const registrationDate = new Date(info.registrationDate);
     const expirationDate = new Date(info.expirationDate);
     const today = new Date();
@@ -362,7 +352,6 @@ function createDomainCard(info) {
          remainingText = daysRemaining > 0 ? daysRemaining + ' 天' : '已到期';
          if (daysRemaining <= 0) { elapsedText = Math.floor(totalDays) + ' 天'; }
     } else {
-        // 如果信息缺失，进度条显示 N/A
         progressPercentage = 0;
         remainingText = 'N/A';
         elapsedText = 'N/A';
@@ -371,7 +360,6 @@ function createDomainCard(info) {
 
     // 根据状态调整边框颜色
     let borderColor = statusColor;
-    
     return \`
         <div class="domain-card" style="--status-color: \${statusColor}; --border-color: \${borderColor};">
             <div class="card-header">
@@ -447,46 +435,33 @@ function renderDomainCards() {
 function renderPagination() {
     const paginationEl = document.getElementById('pagination');
     const totalPages = Math.ceil(currentFilteredDomains.length / ITEMS_PER_PAGE);
-    
-    if (totalPages <= 1) {
-        paginationEl.innerHTML = '';
-        return;
-    }
+    if (totalPages <= 1) { paginationEl.innerHTML = ''; return; }
 
     let html = '';
-    
     // 上一页
     html += \`<button class="page-btn" \${currentPage === 1 ? 'disabled' : ''} data-page="\${currentPage - 1}"><i class="fas fa-arrow-left"></i></button>\`;
-
     // 页码按钮 (简单显示)
     let startPage = Math.max(1, currentPage - 2);
     let endPage = Math.min(totalPages, currentPage + 2);
-
     if (startPage > 1) {
         html += \`<button class="page-btn" data-page="1">1</button>\`;
         if (startPage > 2) html += \`<span class="page-dots">...</span>\`;
     }
-
     for (let i = startPage; i <= endPage; i++) {
         html += \`<button class="page-btn \${currentPage === i ? 'active' : ''}" data-page="\${i}">\${i}</button>\`;
     }
-    
     if (endPage < totalPages) {
         if (endPage < totalPages - 1) html += \`<span class="page-dots">...</span>\`;
         html += \`<button class="page-btn" data-page="\${totalPages}">\${totalPages}</button>\`;
     }
-
-
     // 下一页
     html += \`<button class="page-btn" \${currentPage === totalPages ? 'disabled' : ''} data-page="\${currentPage + 1}"><i class="fas fa-arrow-right"></i></button>\`;
 
     paginationEl.innerHTML = html;
     paginationEl.querySelectorAll('.page-btn').forEach(button => {
         button.addEventListener('click', (e) => {
-            // 确保点击的是按钮本身或其直接的子元素
             const target = e.target.closest('.page-btn');
             if (!target) return;
-            
             const page = parseInt(target.dataset.page);
             if (page && page >= 1 && page <= totalPages) {
                 currentPage = page;
@@ -496,24 +471,10 @@ function renderPagination() {
     });
 }
 
-// 应用状态、分组、搜索过滤、状态筛选
+// 分组、搜索过滤、状态筛选
 function applyFiltersAndSearch() {
-    currentFilteredDomains = allDomains.filter(domain => {
-
-        // 1. 状态过滤
-        const { statusText } = getDomainStatus(domain.expirationDate);
-        let statusMatch = true;
-
-        if (currentStatusFilter !== '全部') {
-            if (currentStatusFilter === '正常') {
-                statusMatch = (statusText === '正常' || statusText === '将到期');
-            } else {
-                statusMatch = (statusText === currentStatusFilter);
-            }
-        }
-        if (!statusMatch) return false;
-
-        // 2. 分组过滤
+    const commonFilters = (domain) => {
+        // 分组过滤 (Common)
         const domainGroups = (domain.groups || '').split(',').map(g => g.trim()).filter(g => g);
         const domainLevel = getDomainLevel(domain.domain);
         let groupMatch = true;
@@ -527,13 +488,11 @@ function applyFiltersAndSearch() {
         } else if (currentGroup !== '全部') {
             groupMatch = domainGroups.includes(currentGroup);
         }
-
         if (!groupMatch) return false;
 
-        // 2. 搜索过滤
+        // 搜索过滤 (Common)
         const searchTerm = currentSearchTerm.toLowerCase();
         if (searchTerm) {
-            // 只要以下任何一个字段包含搜索词，即返回 true
             return (
                 domain.domain.toLowerCase().includes(searchTerm) || // 域名
                 (domain.system || '').toLowerCase().includes(searchTerm) || // 注册商
@@ -541,8 +500,22 @@ function applyFiltersAndSearch() {
                 (domain.groups || '').toLowerCase().includes(searchTerm) // 分组
             );
         }
-
         return true;
+    };
+    
+    // 计算 domainsForSummary
+    const domainsForSummary = allDomains.filter(commonFilters);
+    renderSummary(domainsForSummary);
+
+    // 计算 currentFilteredDomains
+    currentFilteredDomains = domainsForSummary.filter(domain => {
+        const { statusText } = getDomainStatus(domain.expirationDate);
+        if (currentStatusFilter === '' || currentStatusFilter === '全部') { return true; }
+        if (currentStatusFilter === '正常') {
+            return (statusText === '正常' || statusText === '将到期');
+        } else {
+            return (statusText === currentStatusFilter);
+        }
     });
 
     renderDomainCards();
@@ -550,7 +523,7 @@ function applyFiltersAndSearch() {
 
 // --- 数据操作函数 ---
 
-// 从 API 获取所有域名数据
+// 从 API 获取所有域名数据并自动排序
 async function fetchDomains() {
     try {
         const response = await fetch(DOMAINS_API);
@@ -590,12 +563,11 @@ async function fetchDomains() {
             return systemA.localeCompare(systemB);
         });
 
-        lastOperatedDomain = null; // 清除临时置顶标记
-        renderSummary();
-        renderGroupTabs();
-        applyFiltersAndSearch(); // 首次渲染
-        currentStatusFilter = '全部';
-        currentGroup = '全部';
+        lastOperatedDomain = null; 
+        currentStatusFilter = ''; // 设置概览信息默认值为空
+        currentGroup = '全部'; // 分组默认激活 '全部'
+        renderGroupTabs(); // 渲染所有分组标签
+        applyFiltersAndSearch(); // 应用筛选，并负责渲染 Summary 和 DomainCards
         
     } catch (error) {
         console.error('获取域名失败:', error);
@@ -609,7 +581,7 @@ async function submitDomainForm(e) {
     const modal = document.getElementById('domainFormModal');
     const domainValue = document.getElementById('domain').value.trim();
     
-    if (!isValidDomainFormat(domainValue)) { // 验证域名格式
+    if (!isValidDomainFormat(domainValue)) {
         alert('请输入有效的域名格式，例如: example.com 或 sub.example.com');
         return;
     }
@@ -651,7 +623,7 @@ async function submitDomainForm(e) {
             // 忽略 JSON 解析错误，如果响应体为空
         }
         
-        if (response.status === 409) { alert('域名已存在，请勿重复添加'); return; }
+        if (response.status === 409) { throw new Error('域名已存在，请勿重复添加'); }
         if (response.status === 422) { throw new Error(responseData.error || '信息不完整，请检查必填项'); }
         if (!response.ok) { throw new Error(responseData.error || response.statusText || '保存失败'); }
         
@@ -693,7 +665,7 @@ async function deleteDomain(domain) {
         const deletedCount = responseData.deletedCount || domainsToDelete.length;
         alert(\`域名 \${domain} 已删除 (\${deletedCount} 个记录被移除)\`);
 
-        currentPage = 1; // 删除后重置页码到第一页
+        currentPage = 1;
         await fetchDomains(); // 重新加载数据
     } catch (error) {
         console.error('删除域名失败:', error);
@@ -701,7 +673,7 @@ async function deleteDomain(domain) {
     }
 }
 
-// 打开添加/编辑表单 (原始代码中的函数，已合并)
+// 打开添加/编辑表单
 function openDomainForm(domainInfo = null) {
     const modal = document.getElementById('domainFormModal');
     const form = document.getElementById('domainForm');
@@ -745,45 +717,48 @@ function openDomainForm(domainInfo = null) {
 
 // 动态切换表单必填项的提示
 function updateFormRequiredStatus(domainValue) {
-    // 检查返回值是否为 '一级域名' 来进行布尔判断
-    const isPrimary = isPrimaryDomain(domainValue);
-    const requiredFields = ['registrationDate', 'expirationDate', 'system', 'systemURL'];
-    const warningEl = document.getElementById('domainFillWarning');
+    const domainValueTrimmed = domainValue.trim(); // 当前输入的域名
+    const isPrimary = isPrimaryDomain(domainValueTrimmed); // 当前输入域名是否为一级域名
+    const requiredFields = ['registrationDate', 'expirationDate', 'system', 'systemURL']; // 二级域名必填表单项
+    const warningEl = document.getElementById('domainFillWarning'); // 获取动态提示或警告元素
+    const originalDomain = document.getElementById('editOriginalDomain').value; // 获取编辑模式下的原域名
+    const domainExists = allDomains.some(d => d.domain === domainValueTrimmed && d.domain !== originalDomain); // 当前输入域名是否存在
 
-    // 判断是否显示域名级别提示
-    if (!domainValue || domainValue.trim() === '') {
-        if (warningEl) {
-            warningEl.style.display = 'none';
-        }
-        // 域名为空时，保留原始的 required 属性，以确保二级域名验证正常
+    // 处理域名为空的情况
+    if (!domainValueTrimmed) {
+        if (warningEl) { warningEl.style.display = 'none'; }
         requiredFields.forEach(id => {
             const el = document.getElementById(id);
-            if (el) {
-                el.required = true; // 默认为必填，直到判断为一级域名
-                el.placeholder = '二级域名必填';
-            }
+            if (el) { el.required = true; el.placeholder = '二级域名必填'; }
         });
         return;
-    } else {
-        // 域名不为空时，显示提示
-        if (warningEl) {
-            warningEl.style.display = 'block';
-        }
     }
     
+    // 处理域名已存在的情况 (仅在新增模式下或域名被修改为已存在的域名时触发)
+    if (domainExists) {
+        if (warningEl) {
+            warningEl.textContent = '域名已存在，请勿重复添加';
+            warningEl.style.color = '#e74c3c'; 
+            warningEl.style.display = 'block';
+        }
+        requiredFields.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.required = false; el.placeholder = '已存在，无需填写'; }
+        });
+        return; 
+    }
+
+    // 处理域名不存在的情况 (一级/二级域名处理逻辑)
+    if (warningEl) { warningEl.style.display = 'block'; }
     if (isPrimary) {
         // 一级域名：提示 WHOIS 自动填充
         if (warningEl) {
             warningEl.textContent = '检测为一级域名，可不填写日期和注册商，将使用 WHOIS API 自动获取';
             warningEl.style.color = '#f39c12';
         }
-        
         requiredFields.forEach(id => {
             const el = document.getElementById(id);
-            if (el) {
-                el.required = false;
-                el.placeholder = '一级域名可留空';
-            }
+            if (el) { el.required = false; el.placeholder = '一级域名可留空'; }
         });
     } else {
         // 二级域名：所有字段必填
@@ -791,13 +766,9 @@ function updateFormRequiredStatus(domainValue) {
             warningEl.textContent = '检测为二级域名，日期和注册商为必填项, 无法使用 WHOIS API 自动获取';
             warningEl.style.color = '#e74c3c';
         }
-        
         requiredFields.forEach(id => {
             const el = document.getElementById(id);
-            if (el) {
-                el.required = true;
-                el.placeholder = '二级域名必填';
-            }
+            if (el) { el.required = true; el.placeholder = '二级域名必填'; }
         });
     }
 }
@@ -816,9 +787,7 @@ window.addEventListener('load', async () => {
     const modal = document.getElementById('domainFormModal');
     modal.querySelector('.close-btn').addEventListener('click', () => modal.style.display = 'none');
     window.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
+        if (event.target === modal) { modal.style.display = 'none'; }
     });
     document.getElementById('domainForm').addEventListener('submit', submitDomainForm);
 
